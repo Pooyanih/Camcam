@@ -1,0 +1,48 @@
+name: Build APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Unzip project source (if uploaded as a .zip instead of pushed with git)
+        run: |
+          ZIPFILE=$(ls *.zip 2>/dev/null | head -n 1 || true)
+          if [ -n "$ZIPFILE" ]; then
+            echo "Found $ZIPFILE, extracting..."
+            mkdir -p _src
+            unzip -oq "$ZIPFILE" -d _src
+            INNER=$(find _src -maxdepth 1 -mindepth 1 -type d | head -n 1)
+            cp -r "$INNER"/. .
+            rm -rf _src
+          else
+            echo "No zip found, assuming source was pushed directly with git."
+          fi
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Accept Android SDK licenses
+        run: yes | ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --licenses || true
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build debug APK
+        run: gradle assembleDebug --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ReactionCam-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
